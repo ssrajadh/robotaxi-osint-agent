@@ -23,11 +23,25 @@ jobs:
     - name: Install and start Tor
       run: |
         sudo apt-get update
-        sudo apt-get install -y tor
+        sudo apt-get install -y tor curl
+        # Start Tor service
         sudo service tor start
-        # Wait for Tor to initialize
-        sleep 10
-        # Verify Tor is running
+        # Wait for Tor to bootstrap (connect to the Tor network)
+        echo "Waiting for Tor to bootstrap (connect to network)..."
+        echo "This can take 30-60 seconds..."
+        # Check if Tor has bootstrapped by looking at the control port or logs
+        for i in {1..20}; do
+          # Check Tor bootstrap status via control port (requires tor control port access)
+          # Alternatively, test with a simple connection
+          if curl --socks5-hostname 127.0.0.1:9050 --max-time 10 -s https://api.ipify.org?format=json > /dev/null 2>&1; then
+            echo "Tor successfully connected! Bootstrap complete."
+            exit 0
+          fi
+          echo "Bootstrap attempt $i/20, waiting 3 seconds..."
+          sleep 3
+        done
+        echo "Warning: Tor may not have fully bootstrapped, but continuing..."
+        # Verify Tor service is at least running
         sudo service tor status || exit 1
     
     - name: Install dependencies

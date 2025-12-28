@@ -45,8 +45,8 @@ class RedditPoller:
                 logger.info("RedditPoller initialized (using JSON endpoints with Tor proxy)")
             else:
                 logger.info("RedditPoller initialized (using JSON endpoints, no Tor proxy)")
-        except Exception:
-            logger.info("RedditPoller initialized (using JSON endpoints, no Tor proxy)")
+        except Exception as e:
+            logger.info(f"RedditPoller initialized (using JSON endpoints, no Tor proxy: {e})")
     
     def _contains_keywords(self, text: str) -> bool:
         """Check if text contains any of the target keywords."""
@@ -111,24 +111,15 @@ class RedditPoller:
         url = f"{self.BASE_URL}/{subreddit}/{sort}.json"
         params = {"limit": limit}
         
-        try:
-            # Add a delay to avoid rate limiting (longer for Tor to be safe)
-            delay = 3 if self.proxies else 1
-            time.sleep(delay)
-            # Use longer timeout if using Tor proxy
-            timeout = 30 if self.proxies else 10
-            response = requests.get(
-                url, 
-                headers=self.HEADERS, 
-                params=params, 
-                timeout=timeout,
-                proxies=self.proxies
-            )
-            
-            # Handle rate limiting with retry
-            if response.status_code == 429:
-                logger.warning(f"Rate limited for r/{subreddit}, waiting 10 seconds and retrying...")
-                time.sleep(10)
+        max_retries = 3 if self.proxies else 1
+        timeout = 45 if self.proxies else 10
+        
+        for attempt in range(max_retries):
+            try:
+                # Add a delay to avoid rate limiting (longer for Tor to be safe)
+                delay = 5 if self.proxies else 1
+                time.sleep(delay)
+                
                 response = requests.get(
                     url, 
                     headers=self.HEADERS, 
@@ -136,27 +127,56 @@ class RedditPoller:
                     timeout=timeout,
                     proxies=self.proxies
                 )
-            
-            response.raise_for_status()
-            
-            data = response.json()
-            posts = []
-            
-            # Reddit JSON format: data.children[].data
-            if 'data' in data and 'children' in data['data']:
-                for child in data['data']['children']:
-                    if 'data' in child:
-                        posts.append(child['data'])
-            
-            logger.info(f"Fetched {len(posts)} posts from r/{subreddit} ({sort})")
-            return posts
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching r/{subreddit}: {e}")
-            return None
-        except (KeyError, ValueError) as e:
-            logger.error(f"Error parsing JSON from r/{subreddit}: {e}")
-            return None
+                
+                # Handle rate limiting with retry
+                if response.status_code == 429:
+                    logger.warning(f"Rate limited for r/{subreddit}, waiting 10 seconds and retrying...")
+                    time.sleep(10)
+                    response = requests.get(
+                        url, 
+                        headers=self.HEADERS, 
+                        params=params, 
+                        timeout=timeout,
+                        proxies=self.proxies
+                    )
+                
+                response.raise_for_status()
+                
+                # Parse response
+                data = response.json()
+                posts = []
+                
+                # Reddit JSON format: data.children[].data
+                if 'data' in data and 'children' in data['data']:
+                    for child in data['data']['children']:
+                        if 'data' in child:
+                            posts.append(child['data'])
+                
+                logger.info(f"Fetched {len(posts)} posts from r/{subreddit} ({sort})")
+                return posts
+                
+            except (requests.exceptions.ConnectTimeout, requests.exceptions.Timeout) as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 10
+                    logger.warning(f"Connection timeout for r/{subreddit} (attempt {attempt + 1}/{max_retries}), waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # If Tor keeps timing out, disable it and try without proxy
+                    if self.proxies and attempt == max_retries - 1:
+                        logger.error(f"Tor connection timeout for r/{subreddit} after {max_retries} attempts. Tor may be blocked or unavailable.")
+                        logger.warning("Note: Reddit may block requests without Tor proxy")
+                    else:
+                        logger.error(f"Error fetching r/{subreddit}: {e}")
+                    return None
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error fetching r/{subreddit}: {e}")
+                return None
+            except (KeyError, ValueError) as e:
+                logger.error(f"Error parsing JSON from r/{subreddit}: {e}")
+                return None
+        
+        return None
     
     def _post_to_candidate(self, post_data: Dict[str, Any]) -> SightingCandidate:
         """Convert a Reddit post JSON data to a SightingCandidate."""
