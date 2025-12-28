@@ -30,8 +30,7 @@ jobs:
       with:
         name: robotaxi-state
         path: ./
-        if-no-artifact-found: ignore
-        continue-on-error: true
+      continue-on-error: true
     
     - name: Run robotaxi scan
       env:
