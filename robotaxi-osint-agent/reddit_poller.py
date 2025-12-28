@@ -4,6 +4,7 @@ Uses Reddit's public JSON endpoints (no API credentials required).
 """
 import requests
 import logging
+import time
 from typing import List, Optional, Dict, Any
 from datetime import datetime, UTC
 from config import Config
@@ -17,7 +18,12 @@ class RedditPoller:
     
     BASE_URL = "https://www.reddit.com/r"
     HEADERS = {
-        "User-Agent": "robotaxi-osint-agent/1.0 (by /u/robotaxi-tracker)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Referer": "https://www.reddit.com/"
     }
     
     def __init__(self):
@@ -89,6 +95,8 @@ class RedditPoller:
         params = {"limit": limit}
         
         try:
+            # Add a small delay to avoid rate limiting
+            time.sleep(1)
             response = requests.get(url, headers=self.HEADERS, params=params, timeout=10)
             response.raise_for_status()
             
