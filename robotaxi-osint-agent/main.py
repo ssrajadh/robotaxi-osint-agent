@@ -112,7 +112,8 @@ class RobotaxiAgent:
             json.dump(existing, f, indent=2, default=str)
         
         if new_count > 0 or updated_count > 0:
-            logger.info(f"Saved {new_count} new candidates and updated {updated_count} existing candidates to {self.output_file}")
+            logger.info(f"Saved {new_count} new candidate(s) and updated {updated_count} existing candidate(s) to {self.output_file}")
+            logger.info(f"Total candidates in file: {len(existing)}")
         else:
             logger.info(f"No changes to save")
     

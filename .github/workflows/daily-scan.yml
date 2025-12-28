@@ -76,7 +76,7 @@ jobs:
           echo "**To view results:**" >> $GITHUB_STEP_SUMMARY
           echo "1. Scroll down to the 'Artifacts' section" >> $GITHUB_STEP_SUMMARY
           echo "2. Download the 'robotaxi-state' artifact" >> $GITHUB_STEP_SUMMARY
-          echo "3. Extract and open `candidates.json`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Extract and open candidates.json" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if command -v jq &> /dev/null; then
             TOTAL=$(jq '. | length' candidates.json 2>/dev/null || echo "0")
