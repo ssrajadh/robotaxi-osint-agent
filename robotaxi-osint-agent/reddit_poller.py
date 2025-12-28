@@ -29,7 +29,24 @@ class RedditPoller:
     def __init__(self):
         """Initialize the Reddit poller."""
         self.keywords = [kw.lower() for kw in Config.KEYWORDS]
-        logger.info("RedditPoller initialized (using JSON endpoints)")
+        # Set up Tor proxy if available (optional)
+        self.proxies = None
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', 9050))
+            sock.close()
+            if result == 0:
+                # Tor is running on port 9050
+                self.proxies = {
+                    "http": "socks5h://127.0.0.1:9050",
+                    "https": "socks5h://127.0.0.1:9050"
+                }
+                logger.info("RedditPoller initialized (using JSON endpoints with Tor proxy)")
+            else:
+                logger.info("RedditPoller initialized (using JSON endpoints, no Tor proxy)")
+        except Exception:
+            logger.info("RedditPoller initialized (using JSON endpoints, no Tor proxy)")
     
     def _contains_keywords(self, text: str) -> bool:
         """Check if text contains any of the target keywords."""
@@ -95,9 +112,31 @@ class RedditPoller:
         params = {"limit": limit}
         
         try:
-            # Add a small delay to avoid rate limiting
-            time.sleep(1)
-            response = requests.get(url, headers=self.HEADERS, params=params, timeout=10)
+            # Add a delay to avoid rate limiting (longer for Tor to be safe)
+            delay = 3 if self.proxies else 1
+            time.sleep(delay)
+            # Use longer timeout if using Tor proxy
+            timeout = 30 if self.proxies else 10
+            response = requests.get(
+                url, 
+                headers=self.HEADERS, 
+                params=params, 
+                timeout=timeout,
+                proxies=self.proxies
+            )
+            
+            # Handle rate limiting with retry
+            if response.status_code == 429:
+                logger.warning(f"Rate limited for r/{subreddit}, waiting 10 seconds and retrying...")
+                time.sleep(10)
+                response = requests.get(
+                    url, 
+                    headers=self.HEADERS, 
+                    params=params, 
+                    timeout=timeout,
+                    proxies=self.proxies
+                )
+            
             response.raise_for_status()
             
             data = response.json()

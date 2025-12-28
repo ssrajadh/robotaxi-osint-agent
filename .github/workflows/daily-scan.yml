@@ -20,6 +20,16 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Install and start Tor
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tor
+        sudo service tor start
+        # Wait for Tor to initialize
+        sleep 10
+        # Verify Tor is running
+        sudo service tor status || exit 1
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip

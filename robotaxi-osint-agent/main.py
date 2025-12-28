@@ -46,11 +46,16 @@ class RobotaxiAgent:
                     last_check_str = state.get('last_check')
                     if last_check_str:
                         # Parse ISO format string and ensure UTC timezone
-                        # Replace 'Z' with '+00:00' for proper parsing
+                        # Handle different formats
+                        last_check_str = last_check_str.strip()
+                        # Remove trailing 'Z' if present
                         if last_check_str.endswith('Z'):
                             last_check_str = last_check_str[:-1] + '+00:00'
+                        # Handle double timezone issue (e.g., "2025-12-28T21:18:40.323267+00:00+00:00")
+                        if last_check_str.count('+00:00') > 1:
+                            last_check_str = last_check_str.replace('+00:00+00:00', '+00:00')
                         dt = datetime.fromisoformat(last_check_str)
-                        # Ensure timezone-aware (UTC) - fromisoformat should handle this, but be safe
+                        # Ensure timezone-aware (UTC)
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=UTC)
                         return dt
