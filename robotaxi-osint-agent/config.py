@@ -14,6 +14,10 @@ class Config:
     # OpenAI API
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
+    # Google Custom Search API (for X/Twitter polling)
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    GOOGLE_CSE_ID: str = os.getenv("GOOGLE_CSE_ID", "")
+    
     # Application Settings
     SUBREDDITS: List[str] = ["TeslaLounge", "SelfDrivingCars", "teslamotors"]
     OUTPUT_FILE: str = os.getenv("OUTPUT_FILE", "candidates.json")
@@ -37,4 +41,5 @@ class Config:
         """Validate that required configuration is present."""
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required")
+        # Google API keys are optional (only needed for X/Twitter polling)
         return True

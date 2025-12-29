@@ -50,15 +50,67 @@ jobs:
         pip install -r requirements.txt
     
     - name: Download previous state (if exists)
-      uses: actions/download-artifact@v4
-      with:
-        name: robotaxi-state
-        path: ./
       continue-on-error: true
+      run: |
+        # Get workflow runs for this repository
+        # We'll query the runs API and filter for our workflow name and successful status
+        WORKFLOW_NAME="${{ github.workflow }}"
+        BRANCH="${{ github.ref_name }}"
+        CURRENT_RUN_ID=${{ github.run_id }}
+        
+        echo "Looking for previous successful run of workflow: $WORKFLOW_NAME"
+        
+        # Query workflow runs - get recent runs and find the most recent successful one before current run
+        # Use the runs API which doesn't require workflow ID
+        PREV_RUN_JSON=$(gh api repos/${{ github.repository }}/actions/runs \
+          --jq ".workflow_runs[] | select(.name==\"$WORKFLOW_NAME\" and .status==\"completed\" and .conclusion==\"success\" and .head_branch==\"$BRANCH\" and .id < $CURRENT_RUN_ID) | {id: .id, created_at: .created_at}" \
+          --paginate --per-page 20 2>/dev/null | head -n 1 || echo "")
+        
+        if [ -z "$PREV_RUN_JSON" ]; then
+          echo "No previous successful run found, starting fresh"
+          exit 0
+        fi
+        
+        PREV_RUN_ID=$(echo "$PREV_RUN_JSON" | jq -r '.id' 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_RUN_ID" ] || [ "$PREV_RUN_ID" == "null" ]; then
+          echo "No previous successful run found, starting fresh"
+          exit 0
+        fi
+        
+        echo "Found previous successful run: $PREV_RUN_ID"
+        
+        # Get artifact ID for robotaxi-state from previous run
+        ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/$PREV_RUN_ID/artifacts \
+          --jq '.artifacts[] | select(.name=="robotaxi-state") | .id' 2>/dev/null || echo "")
+        
+        if [ -z "$ARTIFACT_ID" ]; then
+          echo "No robotaxi-state artifact found in previous run"
+          exit 0
+        fi
+        
+        echo "Downloading artifact $ARTIFACT_ID from previous run"
+        
+        # Download the artifact
+        gh api repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > robotaxi-state.zip 2>/dev/null || exit 0
+        
+        # Extract the artifact
+        if [ -f robotaxi-state.zip ]; then
+          unzip -o robotaxi-state.zip -d ./ || exit 0
+          rm robotaxi-state.zip
+          echo "Successfully downloaded previous state"
+          ls -la state.json candidates.json 2>/dev/null || echo "Note: Some files may not exist in artifact"
+        else
+          echo "Failed to download artifact"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Run robotaxi scan
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        GOOGLE_CSE_ID: ${{ secrets.GOOGLE_CSE_ID }}
         OUTPUT_FILE: ../candidates.json
         STATE_FILE: ../state.json
       working-directory: robotaxi-osint-agent

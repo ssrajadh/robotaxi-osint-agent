@@ -10,6 +10,7 @@ from pathlib import Path
 from config import Config
 from models import SightingCandidate
 from reddit_poller import RedditPoller
+from x_poller import XPoller
 from llm_analyzer import LLMAnalyzer
 
 # Set up logging
@@ -30,7 +31,17 @@ class RobotaxiAgent:
     def __init__(self):
         """Initialize the agent with all components."""
         Config.validate()
-        self.poller = RedditPoller()
+        self.reddit_poller = RedditPoller()
+        # Initialize X poller if Google API keys are configured
+        self.x_poller = None
+        if Config.GOOGLE_API_KEY and Config.GOOGLE_CSE_ID:
+            try:
+                self.x_poller = XPoller()
+                logger.info("XPoller initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize XPoller: {e}")
+        else:
+            logger.info("XPoller not initialized (Google API keys not configured)")
         self.analyzer = LLMAnalyzer()
         self.output_file = Path(Config.OUTPUT_FILE)
         self.state_file = Path(Config.STATE_FILE)
@@ -128,13 +139,28 @@ class RobotaxiAgent:
         logger.info("Starting scan cycle")
         logger.info("=" * 60)
         
-        # Fetch posts
+        # Fetch posts from all sources
+        all_candidates = []
+        
+        # Fetch from Reddit
+        logger.info("Fetching posts from Reddit...")
         if self.last_check:
-            logger.info(f"Fetching posts since last check: {self.last_check}")
-            candidates = self.poller.fetch_new_posts_since(self.last_check)
+            reddit_candidates = self.reddit_poller.fetch_new_posts_since(self.last_check)
         else:
             logger.info("No previous state found, fetching recent posts from last day")
-            candidates = self.poller.fetch_recent_posts(limit=50, time_filter="day")
+            reddit_candidates = self.reddit_poller.fetch_recent_posts(limit=50, time_filter="day")
+        all_candidates.extend(reddit_candidates)
+        
+        # Fetch from X/Twitter if configured
+        if self.x_poller:
+            logger.info("Fetching posts from X/Twitter...")
+            if self.last_check:
+                x_candidates = self.x_poller.fetch_new_posts_since(self.last_check)
+            else:
+                x_candidates = self.x_poller.fetch_recent_posts(limit=10)
+            all_candidates.extend(x_candidates)
+        
+        candidates = all_candidates
         
         # Update and save last check timestamp
         self.last_check = datetime.now(UTC)

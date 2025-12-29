@@ -9,9 +9,10 @@ An autonomous intelligence agent that monitors public forums and social media fo
 ## Features
 
 - **Reddit Monitoring**: Monitors r/TeslaLounge, r/SelfDrivingCars, and r/teslamotors using public JSON endpoints (no API credentials required!)
+- **X/Twitter Monitoring**: Monitors X/Twitter for robotaxi-related posts via Google Custom Search API (optional, requires Google API keys)
 - **Keyword Filtering**: Fast heuristic filtering using keywords like "robotaxi", "cybercab", "manufacturer plate"
 - **LLM Analysis**: Uses GPT-4o-mini to extract structured data from posts
-- **Image Support**: Extracts and processes images from Reddit posts
+- **Image Support**: Extracts and processes images from Reddit posts and X/Twitter
 - **Deduplication**: Prevents duplicate alerts for the same post
 - **JSON Output**: Stores candidates in a structured format for downstream processing
 
@@ -60,9 +61,13 @@ The project includes a GitHub Actions workflow for automated daily scanning.
 
 In your GitHub repository, go to **Settings → Secrets and variables → Actions** and add:
 
-- `OPENAI_API_KEY`: Your OpenAI API key
+- `OPENAI_API_KEY`: Your OpenAI API key (required)
+- `GOOGLE_API_KEY`: Your Google Custom Search API key (optional, for X/Twitter polling)
+- `GOOGLE_CSE_ID`: Your Google Custom Search Engine ID (optional, for X/Twitter polling)
 
-**Note:** No Reddit API credentials needed! The agent uses Reddit's public JSON endpoints.
+**Note:** 
+- No Reddit API credentials needed! The agent uses Reddit's public JSON endpoints.
+- X/Twitter polling via Google Custom Search API is optional. If not configured, the agent will only monitor Reddit.
 
 ### 2. Schedule Configuration
 
@@ -90,7 +95,8 @@ After each run, download the `robotaxi-state` artifact to view:
 
 ## Roadmap
 
-- ✅ Phase 1: Reddit MVP (Current)
-- ⬜ Phase 2: Add support for scraping X posts through Google Search and improve agent with LangGraph
+- ✅ Phase 1: Reddit MVP
+- ✅ X/Twitter Monitoring via Google Custom Search (keyword-based search across X/Twitter)
+- ⬜ Phase 2: Expand X/Twitter monitoring to additional accounts and improve agent with LangGraph
 - ⬜ Phase 3: Integrate with robotaxi tracker repo once it becomes open-source
 
