@@ -3,7 +3,8 @@ Data models for the Robotaxi OSINT Agent.
 """
 from datetime import datetime, UTC
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
+import re
 
 
 class ExtractedData(BaseModel):
@@ -13,6 +14,46 @@ class ExtractedData(BaseModel):
     vehicle_color: Optional[str] = None
     location: Optional[str] = None
     coordinates_approx: Optional[List[float]] = None
+    
+    @field_validator('vehicle_type', mode='before')
+    @classmethod
+    def normalize_vehicle_type(cls, v):
+        """
+        Normalize and validate vehicle type.
+        Only accepts 'cybercab' or 'model y' (case-insensitive).
+        Invalid values are set to None.
+        """
+        if v is None:
+            return None
+        v_lower = str(v).lower().strip()
+        # Normalize to standard forms (case-insensitive matching)
+        if v_lower in ['cybercab', 'cyber cab']:
+            return 'cybercab'
+        elif v_lower in ['model y', 'modely', 'model-y']:
+            return 'model y'
+        else:
+            # Invalid vehicle type - set to None
+            return None
+    
+    @field_validator('location', mode='before')
+    @classmethod
+    def validate_location_format(cls, v):
+        """
+        Validate location is in 'city, state' format.
+        Requires at least one comma to separate city and state.
+        Invalid formats are set to None.
+        """
+        if v is None:
+            return None
+        v_str = str(v).strip()
+        # Pattern: requires comma to separate city and state
+        # Allows flexible formats like "Palo Alto, CA" or "New York, NY, USA"
+        pattern = r'^.+,\s*.+$'
+        if re.match(pattern, v_str):
+            return v_str
+        else:
+            # Invalid location format (missing comma) - set to None
+            return None
 
 
 class MediaData(BaseModel):
