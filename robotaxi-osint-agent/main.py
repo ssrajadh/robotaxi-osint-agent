@@ -1,5 +1,5 @@
 """
-Main entry point for the Robotaxi OSINT Agent.
+Main entry point for the Robotaxi OSINT Agent (LangGraph version).
 """
 import json
 import logging
@@ -9,9 +9,7 @@ from pathlib import Path
 
 from config import Config
 from models import SightingCandidate
-from reddit_poller import RedditPoller
-from x_poller import XPoller
-from llm_analyzer import LLMAnalyzer
+from graph import build_agent_graph, AgentState
 
 # Set up logging
 logging.basicConfig(
@@ -26,27 +24,16 @@ logger = logging.getLogger(__name__)
 
 
 class RobotaxiAgent:
-    """Main orchestrator for the OSINT agent."""
+    """Main orchestrator for the OSINT agent using LangGraph."""
     
     def __init__(self):
-        """Initialize the agent with all components."""
+        """Initialize the agent with LangGraph."""
         Config.validate()
-        self.reddit_poller = RedditPoller()
-        # Initialize X poller if Google API keys are configured
-        self.x_poller = None
-        if Config.GOOGLE_API_KEY and Config.GOOGLE_CSE_ID:
-            try:
-                self.x_poller = XPoller()
-                logger.info("XPoller initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize XPoller: {e}")
-        else:
-            logger.info("XPoller not initialized (Google API keys not configured)")
-        self.analyzer = LLMAnalyzer()
+        self.graph = build_agent_graph()
         self.output_file = Path(Config.OUTPUT_FILE)
         self.state_file = Path(Config.STATE_FILE)
         self.last_check = self._load_last_check()
-        logger.info("RobotaxiAgent initialized")
+        logger.info("RobotaxiAgent initialized with LangGraph")
     
     def _load_last_check(self) -> Optional[datetime]:
         """Load the last check timestamp from state file."""
@@ -130,63 +117,58 @@ class RobotaxiAgent:
     
     def run_once(self) -> int:
         """
-        Run a single scan cycle.
+        Run a single scan cycle using LangGraph.
         
         Returns:
             Number of valid candidates found
         """
         logger.info("=" * 60)
-        logger.info("Starting scan cycle")
+        logger.info("Starting scan cycle (LangGraph)")
         logger.info("=" * 60)
         
-        # Fetch posts from all sources
-        all_candidates = []
+        # Initialize state
+        initial_state: AgentState = {
+            "last_check": self.last_check,
+            "candidates": [],
+            "analyzed_candidates": [],
+            "valid_candidates": [],
+            "rejected_candidates": [],
+            "errors": [],
+            "stats": {}
+        }
         
-        # Fetch from Reddit
-        logger.info("Fetching posts from Reddit...")
-        if self.last_check:
-            reddit_candidates = self.reddit_poller.fetch_new_posts_since(self.last_check)
-        else:
-            logger.info("No previous state found, fetching recent posts from last day")
-            reddit_candidates = self.reddit_poller.fetch_recent_posts(limit=50, time_filter="day")
-        all_candidates.extend(reddit_candidates)
-        
-        # Fetch from X/Twitter if configured
-        if self.x_poller:
-            logger.info("Fetching posts from X/Twitter...")
-            if self.last_check:
-                x_candidates = self.x_poller.fetch_new_posts_since(self.last_check)
-            else:
-                x_candidates = self.x_poller.fetch_recent_posts(limit=10)
-            all_candidates.extend(x_candidates)
-        
-        candidates = all_candidates
-        
-        # Update and save last check timestamp
-        self.last_check = datetime.now(UTC)
-        self._save_last_check(self.last_check)
-        
-        if not candidates:
-            logger.info("No potential candidates found in this cycle")
-            return 0
-        
-        # Analyze each candidate
-        valid_candidates = []
-        for candidate in candidates:
-            analyzed = self.analyzer.analyze(candidate)
+        # Run the graph
+        try:
+            final_state = self.graph.invoke(initial_state)
             
-            # Only save candidates with decent confidence
-            if analyzed.confidence_score >= 0.5:
-                valid_candidates.append(analyzed)
-        
-        # Save results
-        if valid_candidates:
-            self._save_candidates(valid_candidates)
-            logger.info(f"Found {len(valid_candidates)} valid sightings")
-        else:
-            logger.info("No high-confidence candidates found")
-        
-        return len(valid_candidates)
+            # Update last check timestamp
+            self.last_check = datetime.now(UTC)
+            self._save_last_check(self.last_check)
+            
+            # Save valid candidates
+            valid_candidates = final_state.get("valid_candidates", [])
+            if valid_candidates:
+                self._save_candidates(valid_candidates)
+                logger.info(f"Found {len(valid_candidates)} valid sightings")
+            else:
+                logger.info("No high-confidence candidates found")
+            
+            # Log errors if any
+            errors = final_state.get("errors", [])
+            if errors:
+                logger.warning(f"Encountered {len(errors)} errors during processing")
+                for error in errors:
+                    logger.warning(f"  - {error}")
+            
+            # Log stats
+            stats = final_state.get("stats", {})
+            logger.info(f"Processing stats: {stats}")
+            
+            return len(valid_candidates)
+            
+        except Exception as e:
+            logger.error(f"Error running graph: {e}", exc_info=True)
+            return 0
 
 
 def main():

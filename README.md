@@ -2,10 +2,6 @@
 
 An autonomous intelligence agent that monitors public forums and social media for Tesla Robotaxi sightings.
 
-> **Status:** MVP done
-
-## Phase 1: Reddit MVP ✅
-
 ## Features
 
 - **Reddit Monitoring**: Monitors r/TeslaLounge, r/SelfDrivingCars, and r/teslamotors using public JSON endpoints (no API credentials required!)
@@ -15,6 +11,18 @@ An autonomous intelligence agent that monitors public forums and social media fo
 - **Image Support**: Extracts and processes images from Reddit posts and X/Twitter
 - **Deduplication**: Prevents duplicate alerts for the same post
 - **JSON Output**: Stores candidates in a structured format for downstream processing
+
+## Installation
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+This includes:
+- Core dependencies (pydantic, openai, requests)
+- **LangGraph** and LangChain for workflow orchestration
 
 ## Usage
 
@@ -97,6 +105,66 @@ After each run, download the `robotaxi-state` artifact to view:
 
 - ✅ Phase 1: Reddit MVP
 - ✅ X/Twitter Monitoring via Google Custom Search (keyword-based search across X/Twitter)
-- ⬜ Phase 2: Improve agent with LangGraph
+- ✅ Phase 2: Improve agent with LangGraph
 - ⬜ Phase 3: Integrate with robotaxi tracker repo once it becomes open-source
+
+## Architecture
+
+### LangGraph Workflow
+
+The agent uses **LangGraph** for workflow orchestration, providing:
+
+- **State Management**: Centralized state flow through the workflow with type-safe state schema
+- **Modular Nodes**: Separate nodes for fetching, analyzing, and routing candidates
+- **Error Handling**: Accumulated error tracking across the workflow
+- **Statistics**: Processing metrics tracked throughout execution
+- **Extensibility**: Easy to add new nodes or modify the workflow
+
+#### Workflow Structure
+
+The workflow consists of three main nodes:
+
+```
+START → fetch_posts → analyze_candidates → route_candidates → END
+```
+
+1. **`fetch_posts`**: Fetches candidates from Reddit and X/Twitter sources
+2. **`analyze_candidates`**: Analyzes each candidate using LLM to extract structured data
+3. **`route_candidates`**: Routes candidates into valid/rejected buckets based on confidence score (≥0.5)
+
+#### Project Structure
+
+```
+robotaxi-osint-agent/
+├── graph/                      # LangGraph workflow package
+│   ├── __init__.py            # Package exports
+│   ├── graph_state.py         # State schema (AgentState)
+│   ├── graph_nodes.py         # Node functions
+│   └── graph_builder.py       # Graph construction
+├── main.py                     # Entry point
+├── config.py                  # Configuration
+├── models.py                  # Data models (SightingCandidate, etc.)
+├── llm_analyzer.py            # LLM analysis logic
+├── reddit_poller.py           # Reddit data source
+└── x_poller.py                # X/Twitter data source
+```
+
+#### State Schema
+
+The `AgentState` TypedDict defines the workflow state:
+
+- **Input**: `last_check` - Timestamp of last run
+- **Processing**: `candidates`, `analyzed_candidates` - Intermediate data
+- **Output**: `valid_candidates`, `rejected_candidates` - Final results
+- **Metadata**: `errors`, `stats` - Error tracking and statistics
+
+#### Extending the Workflow
+
+To add new nodes or modify the workflow:
+
+1. Add node functions to `graph/graph_nodes.py`
+2. Register nodes in `graph/graph_builder.py`
+3. Add edges to connect nodes in the workflow
+4. Update `AgentState` in `graph/graph_state.py` if new state fields are needed
+
 
