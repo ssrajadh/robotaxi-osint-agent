@@ -97,6 +97,6 @@ After each run, download the `robotaxi-state` artifact to view:
 
 - ✅ Phase 1: Reddit MVP
 - ✅ X/Twitter Monitoring via Google Custom Search (keyword-based search across X/Twitter)
-- ⬜ Phase 2: Expand X/Twitter monitoring to additional accounts and improve agent with LangGraph
+- ⬜ Phase 2: Improve agent with LangGraph
 - ⬜ Phase 3: Integrate with robotaxi tracker repo once it becomes open-source
 
